@@ -208,9 +208,20 @@ class SignalGenerator:
                 1 - analysis.predicted_probability, no_price, "BUY"
             )
 
+            # Apply new market EV bonus for first-mover edge
+            is_new = market.is_new_market(config.trading.new_market_hours)
+            new_market_bonus = 0.0
+            if is_new and config.trading.prioritize_new_markets:
+                new_market_bonus = config.trading.new_market_ev_bonus
+                yes_ev += new_market_bonus
+                no_ev += new_market_bonus
+
             # Log analysis
             logger.info(f"Analyzed: {market.question[:60]}...")
             logger.info(f"  Predicted: {analysis.predicted_probability:.1%} | Market: {yes_price:.1%}")
+            if is_new:
+                age_hours = market.age_hours or 0
+                logger.info(f"  🆕 NEW MARKET ({age_hours:.1f}h old) - EV bonus: +{new_market_bonus:.1%}")
             logger.info(f"  YES EV: {yes_ev:.2%} | NO EV: {no_ev:.2%}")
             logger.info(f"  Confidence: {analysis.confidence:.1%}")
 
@@ -224,6 +235,11 @@ class SignalGenerator:
                     current_price=yes_price,
                     expected_value=yes_ev,
                 )
+                # Add new market info to metadata
+                if is_new:
+                    signal.metadata["is_new_market"] = True
+                    signal.metadata["market_age_hours"] = market.age_hours
+                    signal.metadata["new_market_bonus"] = new_market_bonus
                 logger.info(f"  ✓ Signal generated: BUY YES @ ${yes_price:.4f}")
                 return signal
 
@@ -236,6 +252,11 @@ class SignalGenerator:
                     current_price=no_price,
                     expected_value=no_ev,
                 )
+                # Add new market info to metadata
+                if is_new:
+                    signal.metadata["is_new_market"] = True
+                    signal.metadata["market_age_hours"] = market.age_hours
+                    signal.metadata["new_market_bonus"] = new_market_bonus
                 logger.info(f"  ✓ Signal generated: BUY NO @ ${no_price:.4f}")
                 return signal
 
@@ -321,6 +342,10 @@ class SignalGenerator:
         logger.info(f"Min EV threshold: {self.min_ev * 100:.1f}%")
         logger.info(f"Max position size: ${self.max_position}")
         logger.info(f"Min liquidity: ${self.min_liquidity}")
+        if config.trading.prioritize_new_markets:
+            logger.info(f"New market edge: ENABLED")
+            logger.info(f"  New market threshold: <{config.trading.new_market_hours}h old")
+            logger.info(f"  EV bonus for new markets: +{config.trading.new_market_ev_bonus:.1%}")
         logger.info(f"Dry run: {self.dry_run}")
         logger.info("=" * 60)
 

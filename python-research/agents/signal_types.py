@@ -79,6 +79,30 @@ class MarketData:
         yes = self.yes_token
         return yes.price if yes else 0.5
 
+    @property
+    def age_hours(self) -> Optional[float]:
+        """Get market age in hours since creation"""
+        if not self.created_at:
+            return None
+        try:
+            # Parse created_at timestamp
+            created = datetime.fromisoformat(self.created_at.replace('Z', '+00:00'))
+            now = datetime.utcnow()
+            # Handle timezone-aware vs naive datetime
+            if created.tzinfo is not None:
+                created = created.replace(tzinfo=None)
+            delta = now - created
+            return delta.total_seconds() / 3600  # Convert to hours
+        except Exception:
+            return None
+
+    def is_new_market(self, max_hours: int = 48) -> bool:
+        """Check if market is considered 'new' (< max_hours old)"""
+        age = self.age_hours
+        if age is None:
+            return False  # Unknown age, assume not new
+        return age < max_hours
+
 
 @dataclass
 class AnalysisResult:

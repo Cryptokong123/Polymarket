@@ -100,6 +100,11 @@ class TradingConfig:
     min_trade_interval: int = field(default_factory=lambda: int(os.getenv("MIN_TRADE_INTERVAL", "60")))
     dry_run: bool = field(default_factory=lambda: os.getenv("DRY_RUN", "false").lower() == "true")
 
+    # New market edge settings
+    prioritize_new_markets: bool = field(default_factory=lambda: os.getenv("PRIORITIZE_NEW_MARKETS", "true").lower() == "true")
+    new_market_hours: int = field(default_factory=lambda: int(os.getenv("NEW_MARKET_HOURS", "48")))  # Markets < 48 hours old
+    new_market_ev_bonus: float = field(default_factory=lambda: float(os.getenv("NEW_MARKET_EV_BONUS", "0.02")))  # +2% EV bonus
+
 
 @dataclass
 class ResearchConfig:
