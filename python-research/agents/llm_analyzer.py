@@ -431,6 +431,130 @@ You are not anchored to current market prices and form independent judgments."""
                 risk_factors=["analysis_failed"],
             )
 
+    def _build_crypto_analysis_prompt(
+        self,
+        market: MarketData,
+        technical_data: str,
+        prediction_hint: str,
+        context: Optional[str] = None,
+    ) -> str:
+        """Build prompt for crypto price market with technical analysis"""
+
+        yes_token = market.yes_token
+        no_token = market.no_token
+        yes_price = yes_token.price if yes_token else 0.5
+        no_price = no_token.price if no_token else 0.5
+
+        prompt = f"""You are an expert crypto trader and technical analyst. Analyze this SHORT-TERM crypto price prediction market.
+
+## MARKET QUESTION
+
+**{market.question}**
+
+**End Time:** {market.end_date}
+
+**Current Market Odds:**
+- YES: ${yes_price:.4f} ({yes_price*100:.1f}% implied)
+- NO: ${no_price:.4f} ({no_price*100:.1f}% implied)
+
+## REAL-TIME TECHNICAL ANALYSIS
+
+{technical_data}
+
+## AI TECHNICAL SIGNAL
+
+{prediction_hint}
+
+"""
+        if context:
+            prompt += f"""## RECENT NEWS/CONTEXT
+
+{context}
+
+"""
+
+        prompt += """## YOUR TASK
+
+This is a SHORT-TERM price prediction (minutes to hours). Analyze the technical indicators and news to predict if the price target will be hit.
+
+Consider:
+1. **Momentum** - RSI, MACD, recent price changes
+2. **Trend** - Moving averages, support/resistance
+3. **Volatility** - Bollinger Bands, ATR
+4. **Time** - How much time until market closes?
+5. **News** - Any catalysts that could move price?
+
+## RESPONSE FORMAT
+
+Respond ONLY with valid JSON:
+```json
+{
+    "probability": 0.XX,
+    "confidence": 0.XX,
+    "reasoning": "Your analysis focusing on technical factors...",
+    "key_factors": ["factor 1", "factor 2", "factor 3"],
+    "sentiment": "bullish|bearish|neutral",
+    "risk_factors": ["risk 1", "risk 2"]
+}
+```
+"""
+        return prompt
+
+    async def analyze_crypto_market(
+        self,
+        market: MarketData,
+        technical_data: str,
+        prediction_hint: str,
+        context: Optional[str] = None,
+    ) -> AnalysisResult:
+        """
+        Analyze a crypto price prediction market with technical analysis data.
+
+        Args:
+            market: Market data
+            technical_data: Formatted technical indicators string
+            prediction_hint: AI signal summary (bullish/bearish/mixed)
+            context: Optional news context
+
+        Returns:
+            AnalysisResult with probability estimates
+        """
+        system_prompt = """You are an expert cryptocurrency trader and technical analyst with deep knowledge of:
+- Technical analysis (RSI, MACD, Moving Averages, Bollinger Bands)
+- Price action and candlestick patterns
+- Support and resistance levels
+- Market momentum and trend analysis
+- Short-term crypto price movements
+
+You make accurate predictions for SHORT-TERM price movements based on technical indicators.
+You understand that crypto markets are volatile and adjust confidence levels accordingly."""
+
+        prompt = self._build_crypto_analysis_prompt(market, technical_data, prediction_hint, context)
+
+        try:
+            response = await self.query(prompt, system_prompt)
+            parsed = self._parse_analysis_response(response)
+
+            return AnalysisResult(
+                predicted_probability=float(parsed.get("probability", 0.5)),
+                confidence=float(parsed.get("confidence", 0.5)),
+                reasoning=parsed.get("reasoning", "No reasoning provided"),
+                key_factors=parsed.get("key_factors", []),
+                news_summary=context[:500] if context else None,
+                sentiment=parsed.get("sentiment", "neutral"),
+                risk_factors=parsed.get("risk_factors", []),
+                timestamp=datetime.utcnow().isoformat(),
+            )
+
+        except Exception as e:
+            logger.error(f"Crypto market analysis failed: {e}")
+            return AnalysisResult(
+                predicted_probability=0.5,
+                confidence=0.1,
+                reasoning=f"Analysis failed: {str(e)}",
+                risk_factors=["analysis_failed"],
+            )
+
     async def analyze_multiple(
         self,
         markets: List[MarketData],

@@ -26,6 +26,7 @@ from config import config
 from agents.llm_analyzer import LLMAnalyzer
 from agents.market_research import MarketResearcher
 from agents.signal_types import TradingSignal, MarketData, AnalysisResult
+from agents.crypto_analyzer import CryptoAnalyzer
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +73,9 @@ class SignalGenerator:
             anthropic_api_key=config.llm.anthropic_api_key,
             model=config.llm.model,
         )
+
+        # Crypto analyzer for BTC/crypto price markets
+        self.crypto_analyzer = CryptoAnalyzer() if config.crypto.enabled else None
 
         # Paths
         self.signals_dir = config.signals_dir
@@ -177,11 +181,132 @@ class SignalGenerator:
             },
         )
 
+    async def analyze_crypto_market(self, market: MarketData, crypto_symbol: str) -> Optional[TradingSignal]:
+        """
+        Analyze a crypto price prediction market with technical analysis.
+        """
+        try:
+            logger.info(f"  📊 Crypto market detected ({crypto_symbol}) - Fetching TA...")
+
+            # Get technical indicators
+            indicators = await self.crypto_analyzer.get_technical_indicators(crypto_symbol)
+            technical_data = indicators.get_summary()
+            prediction_hint = indicators.get_prediction_hint()
+
+            # Get news context
+            context = await self.researcher.get_context_for_market(market)
+
+            # Analyze with crypto-specific LLM prompt
+            analysis = await self.analyzer.analyze_crypto_market(
+                market, technical_data, prediction_hint, context
+            )
+            self.markets_analyzed += 1
+
+            # Check confidence threshold for crypto
+            if analysis.confidence < config.crypto.min_confidence:
+                logger.info(f"  ✗ Crypto confidence too low: {analysis.confidence:.1%} < {config.crypto.min_confidence:.1%}")
+                return None
+
+            # Get current prices
+            yes_token = market.yes_token
+            no_token = market.no_token
+
+            if not yes_token or not no_token:
+                logger.warning(f"Market {market.question[:50]}... missing tokens")
+                return None
+
+            yes_price = yes_token.price
+            no_price = no_token.price
+
+            # Calculate EV for both sides
+            yes_ev = self.calculate_expected_value(
+                analysis.predicted_probability, yes_price, "BUY"
+            )
+            no_ev = self.calculate_expected_value(
+                1 - analysis.predicted_probability, no_price, "BUY"
+            )
+
+            # Apply crypto EV bonus (TA gives edge)
+            crypto_bonus = config.crypto.ev_bonus
+            yes_ev += crypto_bonus
+            no_ev += crypto_bonus
+
+            # Also apply new market bonus if applicable
+            is_new = market.is_new_market(config.trading.new_market_hours)
+            if is_new and config.trading.prioritize_new_markets:
+                yes_ev += config.trading.new_market_ev_bonus
+                no_ev += config.trading.new_market_ev_bonus
+
+            # Log analysis
+            logger.info(f"  BTC Price: ${indicators.current_price:,.2f}")
+            logger.info(f"  15m Change: {indicators.change_15m:+.2%} | 1h: {indicators.change_1h:+.2%}")
+            logger.info(f"  RSI: {indicators.rsi_14:.1f} | Trend: {indicators.trend_short}")
+            logger.info(f"  TA Signal: {prediction_hint}")
+            logger.info(f"  Predicted: {analysis.predicted_probability:.1%} | Market: {yes_price:.1%}")
+            logger.info(f"  YES EV: {yes_ev:.2%} | NO EV: {no_ev:.2%} (crypto bonus: +{crypto_bonus:.1%})")
+            logger.info(f"  Confidence: {analysis.confidence:.1%}")
+
+            # Check if either side has sufficient EV
+            if yes_ev > self.min_ev and yes_ev >= no_ev:
+                signal = self.create_signal(
+                    market=market,
+                    analysis=analysis,
+                    token_type="YES",
+                    side="BUY",
+                    current_price=yes_price,
+                    expected_value=yes_ev,
+                )
+                # Add crypto metadata
+                signal.metadata["is_crypto_market"] = True
+                signal.metadata["crypto_symbol"] = crypto_symbol
+                signal.metadata["btc_price"] = indicators.current_price
+                signal.metadata["rsi"] = indicators.rsi_14
+                signal.metadata["trend"] = indicators.trend_short
+                signal.metadata["ta_signal"] = prediction_hint
+                signal.metadata["crypto_bonus"] = crypto_bonus
+                logger.info(f"  ✓ Signal generated: BUY YES @ ${yes_price:.4f}")
+                return signal
+
+            elif no_ev > self.min_ev:
+                signal = self.create_signal(
+                    market=market,
+                    analysis=analysis,
+                    token_type="NO",
+                    side="BUY",
+                    current_price=no_price,
+                    expected_value=no_ev,
+                )
+                # Add crypto metadata
+                signal.metadata["is_crypto_market"] = True
+                signal.metadata["crypto_symbol"] = crypto_symbol
+                signal.metadata["btc_price"] = indicators.current_price
+                signal.metadata["rsi"] = indicators.rsi_14
+                signal.metadata["trend"] = indicators.trend_short
+                signal.metadata["ta_signal"] = prediction_hint
+                signal.metadata["crypto_bonus"] = crypto_bonus
+                logger.info(f"  ✓ Signal generated: BUY NO @ ${no_price:.4f}")
+                return signal
+
+            else:
+                logger.info(f"  ✗ No trade opportunity (EV below threshold)")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error analyzing crypto market: {e}")
+            return None
+
     async def analyze_market(self, market: MarketData) -> Optional[TradingSignal]:
         """
         Analyze a market and generate trading signal if opportunity exists.
         """
         try:
+            # Check if this is a crypto price market
+            if self.crypto_analyzer:
+                crypto_symbol = self.crypto_analyzer.detect_crypto_market(market.question)
+                if crypto_symbol:
+                    return await self.analyze_crypto_market(market, crypto_symbol)
+
+            # Standard market analysis
             # Get context from news sources
             context = await self.researcher.get_context_for_market(market)
 
@@ -346,6 +471,11 @@ class SignalGenerator:
             logger.info(f"New market edge: ENABLED")
             logger.info(f"  New market threshold: <{config.trading.new_market_hours}h old")
             logger.info(f"  EV bonus for new markets: +{config.trading.new_market_ev_bonus:.1%}")
+        if config.crypto.enabled:
+            logger.info(f"Crypto TA: ENABLED")
+            logger.info(f"  EV bonus for crypto markets: +{config.crypto.ev_bonus:.1%}")
+            logger.info(f"  Min confidence for crypto: {config.crypto.min_confidence:.0%}")
+            logger.info(f"  Fast scan interval: {config.crypto.fast_scan_interval}s")
         logger.info(f"Dry run: {self.dry_run}")
         logger.info("=" * 60)
 
@@ -372,6 +502,8 @@ class SignalGenerator:
     async def cleanup(self):
         """Clean up resources"""
         await self.researcher.close()
+        if self.crypto_analyzer:
+            await self.crypto_analyzer.close()
 
 
 async def main():

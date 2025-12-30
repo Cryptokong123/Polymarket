@@ -107,6 +107,15 @@ class TradingConfig:
 
 
 @dataclass
+class CryptoConfig:
+    """Crypto/Bitcoin trading configuration for short-term price markets"""
+    enabled: bool = field(default_factory=lambda: os.getenv("CRYPTO_TA_ENABLED", "true").lower() == "true")
+    fast_scan_interval: int = field(default_factory=lambda: int(os.getenv("CRYPTO_FAST_SCAN_INTERVAL", "30")))  # seconds
+    ev_bonus: float = field(default_factory=lambda: float(os.getenv("CRYPTO_EV_BONUS", "0.03")))  # +3% EV for crypto markets
+    min_confidence: float = field(default_factory=lambda: float(os.getenv("CRYPTO_MIN_CONFIDENCE", "0.6")))  # 60% min confidence
+
+
+@dataclass
 class ResearchConfig:
     """Research and analysis parameters"""
     news_sources: List[str] = field(default_factory=lambda: os.getenv("NEWS_SOURCES", "polymarket,twitter,newsapi").split(","))
@@ -151,6 +160,7 @@ class Config:
     polymarket: PolymarketConfig = field(default_factory=PolymarketConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
+    crypto: CryptoConfig = field(default_factory=CryptoConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
