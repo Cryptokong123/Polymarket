@@ -27,6 +27,7 @@ from agents.llm_analyzer import LLMAnalyzer
 from agents.market_research import MarketResearcher
 from agents.signal_types import TradingSignal, MarketData, AnalysisResult
 from agents.crypto_analyzer import CryptoAnalyzer
+from agents.sentiment_analyzer import SentimentAnalyzer, MarketSentiment
 
 # Configure logging
 logging.basicConfig(
@@ -77,6 +78,13 @@ class SignalGenerator:
         # Crypto analyzer for BTC/crypto price markets
         self.crypto_analyzer = CryptoAnalyzer() if config.crypto.enabled else None
 
+        # Sentiment analyzer for market context
+        self.sentiment_analyzer = SentimentAnalyzer(
+            finnhub_api_key=config.sentiment.finnhub_api_key
+        ) if config.sentiment.enabled else None
+        self._cached_sentiment: Optional[MarketSentiment] = None
+        self._sentiment_cache_time: Optional[datetime] = None
+
         # Paths
         self.signals_dir = config.signals_dir
 
@@ -106,6 +114,32 @@ class SignalGenerator:
 
         logger.info(f"Found {len(markets)} tradeable markets")
         return markets
+
+    async def get_market_sentiment(self) -> Optional[MarketSentiment]:
+        """Get cached market sentiment (refreshes every 5 minutes)"""
+        if not self.sentiment_analyzer:
+            return None
+
+        # Check cache
+        cache_ttl = config.sentiment.cache_ttl
+        if (self._cached_sentiment and self._sentiment_cache_time and
+            (datetime.utcnow() - self._sentiment_cache_time).seconds < cache_ttl):
+            return self._cached_sentiment
+
+        try:
+            logger.info("Fetching market sentiment...")
+            self._cached_sentiment = await self.sentiment_analyzer.get_market_sentiment()
+            self._sentiment_cache_time = datetime.utcnow()
+
+            # Log sentiment summary
+            logger.info(f"  Fear & Greed: {self._cached_sentiment.fear_greed_value}/100 ({self._cached_sentiment.fear_greed_label})")
+            logger.info(f"  News Sentiment: {self._cached_sentiment.news_sentiment_label}")
+            logger.info(f"  Overall: {self._cached_sentiment.overall_sentiment.upper()}")
+
+            return self._cached_sentiment
+        except Exception as e:
+            logger.warning(f"Failed to fetch sentiment: {e}")
+            return None
 
     def calculate_expected_value(
         self,
@@ -195,6 +229,11 @@ class SignalGenerator:
 
             # Get news context
             context = await self.researcher.get_context_for_market(market)
+
+            # Add sentiment context (especially Fear/Greed for crypto)
+            sentiment = await self.get_market_sentiment()
+            if sentiment:
+                context = f"{context}\n\n{sentiment.get_summary()}" if context else sentiment.get_summary()
 
             # Analyze with crypto-specific LLM prompt
             analysis = await self.analyzer.analyze_crypto_market(
@@ -309,6 +348,15 @@ class SignalGenerator:
             # Standard market analysis
             # Get context from news sources
             context = await self.researcher.get_context_for_market(market)
+
+            # Add sentiment context if available
+            sentiment = await self.get_market_sentiment()
+            if sentiment:
+                sentiment_context = sentiment.get_summary()
+                if context:
+                    context = f"{context}\n\n{sentiment_context}"
+                else:
+                    context = sentiment_context
 
             # Analyze with LLM
             analysis = await self.analyzer.analyze_market(market, context)
@@ -476,6 +524,13 @@ class SignalGenerator:
             logger.info(f"  EV bonus for crypto markets: +{config.crypto.ev_bonus:.1%}")
             logger.info(f"  Min confidence for crypto: {config.crypto.min_confidence:.0%}")
             logger.info(f"  Fast scan interval: {config.crypto.fast_scan_interval}s")
+        if config.sentiment.enabled:
+            logger.info(f"Sentiment Analysis: ENABLED")
+            logger.info(f"  Fear & Greed Index: Active")
+            if config.sentiment.finnhub_api_key:
+                logger.info(f"  Finnhub (news + calendar): Active")
+            else:
+                logger.info(f"  Finnhub: Not configured (optional)")
         logger.info(f"Dry run: {self.dry_run}")
         logger.info("=" * 60)
 
@@ -504,6 +559,8 @@ class SignalGenerator:
         await self.researcher.close()
         if self.crypto_analyzer:
             await self.crypto_analyzer.close()
+        if self.sentiment_analyzer:
+            await self.sentiment_analyzer.close()
 
 
 async def main():

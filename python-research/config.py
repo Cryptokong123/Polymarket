@@ -116,6 +116,14 @@ class CryptoConfig:
 
 
 @dataclass
+class SentimentConfig:
+    """Market sentiment analysis configuration"""
+    enabled: bool = field(default_factory=lambda: os.getenv("SENTIMENT_ENABLED", "true").lower() == "true")
+    finnhub_api_key: str = field(default_factory=lambda: os.getenv("FINNHUB_API_KEY", ""))
+    cache_ttl: int = field(default_factory=lambda: int(os.getenv("SENTIMENT_CACHE_TTL", "300")))  # 5 minutes
+
+
+@dataclass
 class ResearchConfig:
     """Research and analysis parameters"""
     news_sources: List[str] = field(default_factory=lambda: os.getenv("NEWS_SOURCES", "polymarket,twitter,newsapi").split(","))
@@ -161,6 +169,7 @@ class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
     crypto: CryptoConfig = field(default_factory=CryptoConfig)
+    sentiment: SentimentConfig = field(default_factory=SentimentConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
