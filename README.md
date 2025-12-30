@@ -27,14 +27,24 @@ A fully autonomous Polymarket prediction market trading bot that combines AI-pow
 
 ## Features
 
-- **AI-Powered Analysis**: Uses LLMs (Claude/GPT-4) to analyze prediction markets
-- **RAG Integration**: Vector store for news and context retrieval
+- **FREE AI Options**: Supports Ollama (local), Groq, and Google Gemini - no paid API needed!
+- **AI-Powered Analysis**: Uses LLMs to analyze prediction markets
 - **Expected Value Trading**: Only trades when expected value exceeds threshold
 - **Risk Management**: Position limits, price limits, and slippage protection
 - **Dual-Layer Architecture**: Python for research, TypeScript for execution
 - **Docker Support**: Easy deployment with Docker Compose
 - **Telegram Notifications**: Optional alerts for signals and trades
 - **Dry Run Mode**: Test without risking real funds
+
+## AI Provider Options (FREE!)
+
+| Provider | Type | Setup | Best For |
+|----------|------|-------|----------|
+| **Ollama** | Local | [Install Guide](#ollama-setup) | Privacy, No limits |
+| **Groq** | Cloud | [Get Free Key](https://console.groq.com/keys) | Speed, Easy setup |
+| **Google Gemini** | Cloud | [Get Free Key](https://aistudio.google.com/apikey) | Good quality |
+| OpenAI | Paid | - | Best quality |
+| Anthropic | Paid | - | Best quality |
 
 ## Quick Start
 
@@ -43,8 +53,11 @@ A fully autonomous Polymarket prediction market trading bot that combines AI-pow
 - Python 3.9+
 - Node.js 18+
 - Docker (optional, for containerized deployment)
-- Polygon wallet with USDC.e
-- LLM API key (OpenAI or Anthropic)
+- Polygon wallet with USDC.e for trading
+- **AI Provider** (choose ONE - all have free options!):
+  - Ollama (free, local) - recommended
+  - Groq API key (free tier)
+  - Google Gemini API key (free tier)
 
 ### Installation
 
@@ -79,13 +92,49 @@ Test without executing real trades:
 
 ## Configuration
 
+### Ollama Setup (Recommended - FREE & Local)
+
+```bash
+# 1. Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Pull a model (choose one)
+ollama pull llama3.1:8b      # Fast, good for most cases (4.7GB)
+ollama pull llama3.1:70b     # Best quality, needs 40GB+ RAM
+
+# 3. Start Ollama server (runs in background)
+ollama serve
+
+# 4. In your .env file, set:
+# LLM_PROVIDER=ollama
+# OLLAMA_MODEL=llama3.1:8b
+```
+
+### Groq Setup (FREE Cloud API - Very Fast)
+
+```bash
+# 1. Get free API key at: https://console.groq.com/keys
+# 2. In your .env file, set:
+# LLM_PROVIDER=groq
+# GROQ_API_KEY=your_key_here
+```
+
+### Google Gemini Setup (FREE Tier)
+
+```bash
+# 1. Get free API key at: https://aistudio.google.com/apikey
+# 2. In your .env file, set:
+# LLM_PROVIDER=google
+# GOOGLE_API_KEY=your_key_here
+```
+
 ### Required Settings
 
 | Variable | Description |
 |----------|-------------|
 | `POLYGON_WALLET_PRIVATE_KEY` | Your Polygon wallet private key |
 | `WALLET_ADDRESS` | Your wallet address |
-| `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | LLM API key |
+| `LLM_PROVIDER` | AI provider: `ollama`, `groq`, or `google` |
 
 ### Trading Parameters
 
@@ -210,6 +259,61 @@ docker-compose logs -f executor
 ```bash
 # Set in .env
 LOG_LEVEL=DEBUG
+```
+
+## Complete Setup Checklist
+
+Before running the bot, you need to complete these steps:
+
+### 1. Wallet Setup
+- [ ] Create a Polygon wallet (e.g., using MetaMask)
+- [ ] Export your private key
+- [ ] Fund wallet with MATIC for gas fees
+- [ ] Fund wallet with USDC.e for trading (bridge from Ethereum if needed)
+
+### 2. AI Provider Setup (Choose ONE)
+- [ ] **Option A: Ollama (FREE, recommended)**
+  - Install: `curl -fsSL https://ollama.com/install.sh | sh`
+  - Pull model: `ollama pull llama3.1:8b`
+  - Start: `ollama serve`
+- [ ] **Option B: Groq (FREE)**
+  - Get API key: https://console.groq.com/keys
+- [ ] **Option C: Google Gemini (FREE)**
+  - Get API key: https://aistudio.google.com/apikey
+
+### 3. Configure Environment
+- [ ] Copy `.env.example` to `.env`
+- [ ] Add `POLYGON_WALLET_PRIVATE_KEY`
+- [ ] Add `WALLET_ADDRESS`
+- [ ] Set `LLM_PROVIDER` (ollama/groq/google)
+- [ ] Add corresponding API key if using cloud provider
+
+### 4. Install Dependencies
+```bash
+# Python
+cd python-research
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# TypeScript
+cd ../eliza-executor
+npm install
+```
+
+### 5. First Run (Dry Mode)
+```bash
+# Test without real trades
+./scripts/start.sh dry-run
+```
+
+### 6. Production Run
+```bash
+# With Docker
+./scripts/start.sh docker
+
+# Or manually
+./scripts/start.sh manual
 ```
 
 ## Legal Disclaimer

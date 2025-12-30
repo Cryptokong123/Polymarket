@@ -37,21 +37,55 @@ class PolymarketConfig:
 
 @dataclass
 class LLMConfig:
-    """LLM configuration for market analysis"""
+    """LLM configuration for market analysis - supports free and paid providers"""
+    # Provider selection
+    provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "ollama"))
+
+    # Ollama (FREE - Local)
+    ollama_base_url: str = field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
+    ollama_model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "llama3.1:8b"))
+
+    # Groq (FREE - Cloud)
+    groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
+    groq_model: str = field(default_factory=lambda: os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"))
+
+    # Google Gemini (FREE tier)
+    google_api_key: str = field(default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""))
+    google_model: str = field(default_factory=lambda: os.getenv("GOOGLE_MODEL", "gemini-1.5-flash"))
+
+    # Paid options
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
-    model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022"))
-    anthropic_model: str = field(default_factory=lambda: os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"))
+    model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", ""))
 
     def get_provider(self) -> str:
-        """Determine which LLM provider to use"""
-        if "claude" in self.model.lower() or "anthropic" in self.model.lower():
-            return "anthropic"
-        return "openai"
+        """Get the configured LLM provider"""
+        return self.provider.lower()
 
     def validate(self) -> bool:
-        """Check if at least one LLM is configured"""
-        return bool(self.openai_api_key or self.anthropic_api_key)
+        """Check if the selected provider is properly configured"""
+        provider = self.get_provider()
+
+        if provider == "ollama":
+            # Ollama just needs the URL (running locally)
+            return bool(self.ollama_base_url)
+        elif provider == "groq":
+            return bool(self.groq_api_key)
+        elif provider == "google":
+            return bool(self.google_api_key)
+        elif provider == "openai":
+            return bool(self.openai_api_key)
+        elif provider == "anthropic":
+            return bool(self.anthropic_api_key)
+
+        # Fallback: check if any provider is configured
+        return bool(
+            self.ollama_base_url or
+            self.groq_api_key or
+            self.google_api_key or
+            self.openai_api_key or
+            self.anthropic_api_key
+        )
 
 
 @dataclass
@@ -135,7 +169,15 @@ class Config:
             errors.append("Wallet configuration missing (POLYGON_WALLET_PRIVATE_KEY, WALLET_ADDRESS)")
 
         if not self.llm.validate():
-            errors.append("LLM configuration missing (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+            provider = self.llm.get_provider()
+            if provider == "ollama":
+                errors.append("Ollama not configured. Install with: curl -fsSL https://ollama.com/install.sh | sh")
+            elif provider == "groq":
+                errors.append("GROQ_API_KEY missing. Get free key at: https://console.groq.com/keys")
+            elif provider == "google":
+                errors.append("GOOGLE_API_KEY missing. Get free key at: https://aistudio.google.com/apikey")
+            else:
+                errors.append(f"LLM provider '{provider}' not configured properly")
 
         if not self.telegram.validate():
             errors.append("Telegram enabled but not properly configured")

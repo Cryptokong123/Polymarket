@@ -57,6 +57,17 @@ class SignalGenerator:
         )
 
         self.analyzer = LLMAnalyzer(
+            provider=config.llm.provider,
+            # Ollama (FREE)
+            ollama_base_url=config.llm.ollama_base_url,
+            ollama_model=config.llm.ollama_model,
+            # Groq (FREE)
+            groq_api_key=config.llm.groq_api_key,
+            groq_model=config.llm.groq_model,
+            # Google (FREE tier)
+            google_api_key=config.llm.google_api_key,
+            google_model=config.llm.google_model,
+            # Paid options
             openai_api_key=config.llm.openai_api_key,
             anthropic_api_key=config.llm.anthropic_api_key,
             model=config.llm.model,
@@ -299,6 +310,13 @@ class SignalGenerator:
         logger.info("=" * 60)
         logger.info("POLYMARKET SIGNAL GENERATOR STARTED")
         logger.info("=" * 60)
+        logger.info(f"LLM Provider: {config.llm.provider.upper()}")
+        if config.llm.provider == "ollama":
+            logger.info(f"  Model: {config.llm.ollama_model}")
+        elif config.llm.provider == "groq":
+            logger.info(f"  Model: {config.llm.groq_model}")
+        elif config.llm.provider == "google":
+            logger.info(f"  Model: {config.llm.google_model}")
         logger.info(f"Scan interval: {scan_interval}s")
         logger.info(f"Min EV threshold: {self.min_ev * 100:.1f}%")
         logger.info(f"Max position size: ${self.max_position}")
