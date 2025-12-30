@@ -1,0 +1,38 @@
+# Polymarket Trading Bot - TypeScript Executor Layer
+# Handles trade execution from signals
+
+FROM node:20-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for better caching
+COPY eliza-executor/package*.json ./eliza-executor/
+
+# Install Node.js dependencies
+WORKDIR /app/eliza-executor
+RUN npm install
+
+# Copy application code
+COPY eliza-executor/ ./
+
+# Copy environment example
+COPY .env.example /app/
+
+# Build TypeScript
+RUN npm run build
+
+# Create necessary directories
+RUN mkdir -p /app/shared/signals /app/shared/executed /app/shared/results /app/data
+
+# Set working directory back
+WORKDIR /app/eliza-executor
+
+# Default command
+CMD ["npm", "start"]
