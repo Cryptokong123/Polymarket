@@ -144,7 +144,7 @@ class LLMAnalyzer:
     # GROQ (FREE - Cloud, Very Fast)
     # =========================================
     async def _query_groq(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Query Groq API - FREE tier with generous limits"""
+        """Query Groq API - FREE tier (12K tokens/min limit)"""
         session = await self._get_session()
 
         messages = []
@@ -161,20 +161,38 @@ class LLMAnalyzer:
             "model": self.groq_model,
             "messages": messages,
             "temperature": self.temperature,
-            "max_tokens": 2000,
+            "max_tokens": 1000,  # Reduced to stay under rate limits
         }
 
-        async with session.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-        ) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                raise Exception(f"Groq API error: {error_text}")
+        # Retry logic for rate limits
+        max_retries = 3
+        for attempt in range(max_retries):
+            async with session.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as response:
+                if response.status == 429:  # Rate limited
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                        logger.warning(f"Groq rate limit hit, waiting {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception("Groq rate limit exceeded after retries")
 
-            data = await response.json()
-            return data["choices"][0]["message"]["content"]
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Groq API error: {error_text}")
+
+                data = await response.json()
+
+                # Add small delay between calls to avoid rate limits
+                await asyncio.sleep(0.5)
+
+                return data["choices"][0]["message"]["content"]
+
+        raise Exception("Groq query failed after all retries")
 
     # =========================================
     # GOOGLE GEMINI (FREE Tier)

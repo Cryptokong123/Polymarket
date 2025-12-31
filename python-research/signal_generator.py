@@ -401,9 +401,15 @@ class SignalGenerator:
             logger.info(f"  Predicted: {analysis.predicted_probability:.1%} | Market: {yes_price:.1%}")
             if is_new:
                 age_hours = market.age_hours or 0
-                logger.info(f"  🆕 NEW MARKET ({age_hours:.1f}h old) - EV bonus: +{new_market_bonus:.1%}")
+                logger.info(f"  [NEW] MARKET ({age_hours:.1f}h old) - EV bonus: +{new_market_bonus:.1%}")
             logger.info(f"  YES EV: {yes_ev:.2%} | NO EV: {no_ev:.2%}")
             logger.info(f"  Confidence: {analysis.confidence:.1%}")
+
+            # Skip if confidence is too low (indicates LLM error/rate limit)
+            min_confidence = 0.3  # 30% minimum confidence required
+            if analysis.confidence < min_confidence:
+                logger.info(f"  [SKIP] Confidence too low ({analysis.confidence:.1%} < {min_confidence:.0%})")
+                return None
 
             # Check if either side has sufficient EV
             if yes_ev > self.min_ev and yes_ev >= no_ev:
