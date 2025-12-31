@@ -38,7 +38,7 @@ class LLMAnalyzer:
         groq_model: str = "llama-3.3-70b-versatile",
         # Google settings
         google_api_key: Optional[str] = None,
-        google_model: str = "gemini-2.0-flash",  # Updated: use stable 2.0 model
+        google_model: str = "gemini-2.5-flash",  # Use latest 2.5 model
         # OpenAI settings
         openai_api_key: Optional[str] = None,
         # Anthropic settings
@@ -241,20 +241,23 @@ class LLMAnalyzer:
 
         # Use correct model name format (NO -latest suffix!)
         model_name = self.google_model
-        # Map common model names to working API names
-        # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
+        # Map old/invalid model names to working ones
+        # Valid models (2025): gemini-2.5-flash, gemini-3-flash, gemini-2.5-flash-lite
         model_mapping = {
-            "gemini-1.5-flash-latest": "gemini-1.5-flash",  # Remove -latest
-            "gemini-2.0-flash-exp": "gemini-2.0-flash",     # Use stable version
-            "gemini-pro": "gemini-1.5-pro",                  # Map old name
-            "gemini-1.5-pro-latest": "gemini-1.5-pro",      # Remove -latest
+            "gemini-1.5-flash": "gemini-2.5-flash",         # Old 1.5 -> 2.5
+            "gemini-1.5-flash-latest": "gemini-2.5-flash",  # Remove -latest
+            "gemini-2.0-flash": "gemini-2.5-flash",         # 2.0 not available -> 2.5
+            "gemini-2.0-flash-exp": "gemini-2.5-flash",     # Exp not available -> 2.5
+            "gemini-pro": "gemini-2.5-flash",               # Old name -> 2.5
+            "gemini-1.5-pro": "gemini-2.5-flash",           # Pro -> 2.5 flash
+            "gemini-1.5-pro-latest": "gemini-2.5-flash",    # Pro latest -> 2.5
         }
         if model_name in model_mapping:
             model_name = model_mapping[model_name]
 
-        # Default to gemini-2.0-flash if model seems invalid
+        # Default to gemini-2.5-flash if model seems invalid
         if "latest" in model_name or "exp" in model_name:
-            model_name = "gemini-2.0-flash"
+            model_name = "gemini-2.5-flash"
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.google_api_key}"
 
