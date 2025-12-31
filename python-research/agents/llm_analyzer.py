@@ -162,7 +162,7 @@ class LLMAnalyzer:
     # GROQ (FREE - Cloud, Very Fast)
     # =========================================
     async def _query_groq(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Query Groq API - FREE tier (12K tokens/min limit)"""
+        """Query Groq API - FREE tier (6K tokens/min limit for free users)"""
         session = await self._get_session()
 
         messages = []
@@ -179,11 +179,11 @@ class LLMAnalyzer:
             "model": self.groq_model,
             "messages": messages,
             "temperature": self.temperature,
-            "max_tokens": 1000,  # Reduced to stay under rate limits
+            "max_tokens": 500,  # Reduced significantly to stay under rate limits
         }
 
-        # Retry logic for rate limits
-        max_retries = 3
+        # Retry logic for rate limits with MUCH longer waits
+        max_retries = 5
         for attempt in range(max_retries):
             async with session.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -192,8 +192,9 @@ class LLMAnalyzer:
             ) as response:
                 if response.status == 429:  # Rate limited
                     if attempt < max_retries - 1:
-                        wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                        logger.warning(f"Groq rate limit hit, waiting {wait_time}s...")
+                        # Wait MUCH longer - Groq free tier is very restrictive
+                        wait_time = 15 * (attempt + 1)  # 15s, 30s, 45s, 60s
+                        logger.warning(f"Groq rate limit hit, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
@@ -204,11 +205,15 @@ class LLMAnalyzer:
                     raise Exception(f"Groq API error: {error_text}")
 
                 data = await response.json()
+                content = data["choices"][0]["message"]["content"]
 
-                # Add small delay between calls to avoid rate limits
-                await asyncio.sleep(0.5)
+                # Log the response for debugging
+                logger.info(f"[LLM Response] {content[:200]}...")
 
-                return data["choices"][0]["message"]["content"]
+                # Wait between successful calls to avoid hitting limits
+                await asyncio.sleep(3)
+
+                return content
 
         raise Exception("Groq query failed after all retries")
 
@@ -443,9 +448,15 @@ You are not anchored to current market prices and form independent judgments."""
 
         prompt = self._build_analysis_prompt(market, context)
 
+        # Debug: Log the market question being analyzed
+        logger.info(f"[LLM Query] Asking about: {market.question[:80]}...")
+
         try:
             response = await self.query(prompt, system_prompt)
+
+            # Debug: Log parsed result
             parsed = self._parse_analysis_response(response)
+            logger.info(f"[LLM Parsed] prob={parsed.get('probability')}, conf={parsed.get('confidence')}, sentiment={parsed.get('sentiment')}")
 
             return AnalysisResult(
                 predicted_probability=float(parsed.get("probability", 0.5)),
