@@ -134,7 +134,7 @@ class SignalExecutor {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { mid?: string };
       return parseFloat(data.mid || '0.5');
     } catch (error) {
       logger.error(`Failed to get current price for ${tokenId}`, { error });

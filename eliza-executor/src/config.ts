@@ -3,22 +3,45 @@
  */
 
 import * as path from 'path';
+import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import type { ExecutorConfig } from './types';
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Try multiple .env locations
+const envPaths = [
+  path.join(__dirname, '../../.env'),      // From dist/ folder
+  path.join(__dirname, '../.env'),          // From src/ folder (ts-node)
+  path.join(process.cwd(), '.env'),         // Current working directory
+  path.join(process.cwd(), '../.env'),      // Parent of working directory
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    const result = dotenv.config({ path: envPath });
+    if (!result.error) {
+      envLoaded = true;
+      break;
+    }
+  }
+}
+
+if (!envLoaded) {
+  // Try default dotenv loading (looks in process.cwd())
+  dotenv.config();
+}
 
 /**
  * Get environment variable with optional default
  */
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
-  if (value === undefined) {
+  if (value === undefined || value === '') {
     if (defaultValue !== undefined) {
       return defaultValue;
     }
-    throw new Error(`Missing required environment variable: ${key}`);
+    // Return empty string for required fields - will be caught by validateConfig
+    return '';
   }
   return value;
 }
@@ -89,14 +112,14 @@ export function validateConfig(config: ExecutorConfig): { valid: boolean; errors
   const errors: string[] = [];
 
   if (!config.privateKey) {
-    errors.push('POLYGON_WALLET_PRIVATE_KEY is required');
+    errors.push('POLYGON_WALLET_PRIVATE_KEY is required - please add your private key to .env');
   } else if (!config.privateKey.startsWith('0x')) {
     // Auto-fix common issue
     config.privateKey = '0x' + config.privateKey;
   }
 
   if (!config.walletAddress) {
-    errors.push('WALLET_ADDRESS is required');
+    errors.push('WALLET_ADDRESS is required - please add your wallet address to .env');
   } else if (!config.walletAddress.startsWith('0x')) {
     errors.push('WALLET_ADDRESS must start with 0x');
   }
@@ -107,6 +130,13 @@ export function validateConfig(config: ExecutorConfig): { valid: boolean; errors
 
   if (config.maxSlippage < 0 || config.maxSlippage > 1) {
     errors.push('MAX_SLIPPAGE must be between 0 and 1');
+  }
+
+  if (errors.length > 0) {
+    console.log('\n[CONFIG ERROR] Missing required wallet configuration.');
+    console.log('Please edit your .env file and add:');
+    console.log('  POLYGON_WALLET_PRIVATE_KEY=0x...');
+    console.log('  WALLET_ADDRESS=0x...\n');
   }
 
   return {
