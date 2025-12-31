@@ -38,7 +38,7 @@ class LLMAnalyzer:
         groq_model: str = "llama-3.3-70b-versatile",
         # Google settings
         google_api_key: Optional[str] = None,
-        google_model: str = "gemini-1.5-flash",
+        google_model: str = "gemini-2.0-flash",  # Updated: use stable 2.0 model
         # OpenAI settings
         openai_api_key: Optional[str] = None,
         # Anthropic settings
@@ -239,16 +239,22 @@ class LLMAnalyzer:
             }
         }
 
-        # Use correct model name format
+        # Use correct model name format (NO -latest suffix!)
         model_name = self.google_model
         # Map common model names to working API names
+        # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
         model_mapping = {
-            "gemini-1.5-flash": "gemini-1.5-flash-latest",
-            "gemini-2.0-flash-exp": "gemini-1.5-flash-latest",  # Fallback if exp not available
-            "gemini-pro": "gemini-1.5-pro-latest",
+            "gemini-1.5-flash-latest": "gemini-1.5-flash",  # Remove -latest
+            "gemini-2.0-flash-exp": "gemini-2.0-flash",     # Use stable version
+            "gemini-pro": "gemini-1.5-pro",                  # Map old name
+            "gemini-1.5-pro-latest": "gemini-1.5-pro",      # Remove -latest
         }
         if model_name in model_mapping:
             model_name = model_mapping[model_name]
+
+        # Default to gemini-2.0-flash if model seems invalid
+        if "latest" in model_name or "exp" in model_name:
+            model_name = "gemini-2.0-flash"
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.google_api_key}"
 
