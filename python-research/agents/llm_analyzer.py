@@ -221,7 +221,7 @@ class LLMAnalyzer:
     # GOOGLE GEMINI (FREE Tier)
     # =========================================
     async def _query_google(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Query Google Gemini API - FREE tier available"""
+        """Query Google Gemini API - FREE tier available (15 RPM)"""
         session = await self._get_session()
 
         # Combine system prompt with user prompt for Gemini
@@ -235,19 +235,37 @@ class LLMAnalyzer:
             }],
             "generationConfig": {
                 "temperature": self.temperature,
-                "maxOutputTokens": 2000,
+                "maxOutputTokens": 1000,
             }
         }
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.google_model}:generateContent?key={self.google_api_key}"
+        # Use correct model name format - gemini-1.5-flash or gemini-2.0-flash-exp
+        model_name = self.google_model
+        if model_name == "gemini-1.5-flash":
+            model_name = "gemini-2.0-flash-exp"  # Updated model name
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.google_api_key}"
+
+        logger.info(f"[Google] Querying model: {model_name}")
 
         async with session.post(url, json=payload) as response:
+            if response.status == 429:  # Rate limited
+                raise Exception("Google Gemini rate limit hit (15 RPM). Wait a minute.")
+
             if response.status != 200:
                 error_text = await response.text()
                 raise Exception(f"Google Gemini API error: {error_text}")
 
             data = await response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+
+            # Log response for debugging
+            logger.info(f"[LLM Response] {content[:200]}...")
+
+            # Rate limit: 15 requests per minute = 4 seconds between requests
+            await asyncio.sleep(4)
+
+            return content
 
     # =========================================
     # OPENAI (Paid)
