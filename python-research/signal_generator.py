@@ -29,6 +29,14 @@ from agents.signal_types import TradingSignal, MarketData, AnalysisResult
 from agents.crypto_analyzer import CryptoAnalyzer
 from agents.sentiment_analyzer import SentimentAnalyzer, MarketSentiment
 
+# Ensure log directory exists
+log_dir = Path(config.logging.file).parent
+log_dir.mkdir(parents=True, exist_ok=True)
+
+# Ensure signal output directory exists
+signal_dir = Path(config.signal_output_dir)
+signal_dir.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, config.logging.level),
