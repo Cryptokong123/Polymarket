@@ -34,8 +34,7 @@ log_dir = Path(config.logging.file).parent
 log_dir.mkdir(parents=True, exist_ok=True)
 
 # Ensure signal output directory exists
-signal_dir = Path(config.signal_output_dir)
-signal_dir.mkdir(parents=True, exist_ok=True)
+config.signals_dir.mkdir(parents=True, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
