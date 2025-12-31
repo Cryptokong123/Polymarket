@@ -235,7 +235,7 @@ class LLMAnalyzer:
             }],
             "generationConfig": {
                 "temperature": self.temperature,
-                "maxOutputTokens": 500,  # Reduced to help with quota
+                "maxOutputTokens": 1024,  # Need enough for full JSON response
             }
         }
 
