@@ -448,12 +448,18 @@ class SignalExecutor {
 // Main entry point
 async function main() {
   try {
+    console.log('[EXECUTOR] Starting...');
     const executor = new SignalExecutor();
     await executor.run();
   } catch (error) {
+    console.error('[EXECUTOR] Fatal error:', error);
     logger.error('Failed to start executor', { error });
     process.exit(1);
   }
 }
 
-main();
+// Properly handle the async main function
+main().catch((error) => {
+  console.error('[EXECUTOR] Unhandled error:', error);
+  process.exit(1);
+});

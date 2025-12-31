@@ -89,9 +89,14 @@ class LLMAnalyzer:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session"""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=120)
+            # Better timeout config: connect fast, allow time for LLM response
+            timeout = aiohttp.ClientTimeout(
+                total=180,        # Total request: 3 minutes max
+                connect=10,       # Connect: 10 seconds
+                sock_read=120,    # Read: 2 minutes (LLM can be slow)
+                sock_connect=10,  # Socket connect: 10 seconds
             )
+            self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
     async def close(self):
@@ -120,6 +125,8 @@ class LLMAnalyzer:
             }
         }
 
+        logger.debug(f"Querying Ollama model: {self.ollama_model}")
+
         try:
             async with session.post(
                 f"{self.ollama_base_url}/api/chat",
@@ -132,6 +139,13 @@ class LLMAnalyzer:
                 data = await response.json()
                 return data["message"]["content"]
 
+        except asyncio.TimeoutError:
+            raise Exception(
+                f"Ollama request timed out. The model '{self.ollama_model}' may be:\n"
+                "  1. Still loading (first request takes longer)\n"
+                "  2. Too large for your RAM\n"
+                "  3. Try a smaller model: ollama pull llama3.2:3b"
+            )
         except aiohttp.ClientConnectorError:
             raise Exception(
                 "Cannot connect to Ollama. Make sure it's running:\n"
@@ -139,6 +153,10 @@ class LLMAnalyzer:
                 "  2. Pull model: ollama pull llama3.1:8b\n"
                 "  3. Start server: ollama serve"
             )
+        except aiohttp.ClientError as e:
+            raise Exception(f"Ollama HTTP error: {e}")
+        except KeyError as e:
+            raise Exception(f"Unexpected Ollama response format: missing {e}")
 
     # =========================================
     # GROQ (FREE - Cloud, Very Fast)
