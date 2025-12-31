@@ -239,22 +239,29 @@ class LLMAnalyzer:
             }
         }
 
-        # Use correct model name format - gemini-1.5-flash or gemini-2.0-flash-exp
+        # Use correct model name format
         model_name = self.google_model
-        if model_name == "gemini-1.5-flash":
-            model_name = "gemini-2.0-flash-exp"  # Updated model name
+        # Map common model names to working API names
+        model_mapping = {
+            "gemini-1.5-flash": "gemini-1.5-flash-latest",
+            "gemini-2.0-flash-exp": "gemini-1.5-flash-latest",  # Fallback if exp not available
+            "gemini-pro": "gemini-1.5-pro-latest",
+        }
+        if model_name in model_mapping:
+            model_name = model_mapping[model_name]
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.google_api_key}"
 
         logger.info(f"[Google] Querying model: {model_name}")
 
         async with session.post(url, json=payload) as response:
-            if response.status == 429:  # Rate limited
-                raise Exception("Google Gemini rate limit hit (15 RPM). Wait a minute.")
-
             if response.status != 200:
                 error_text = await response.text()
-                raise Exception(f"Google Gemini API error: {error_text}")
+                # Log the actual status code for debugging
+                logger.error(f"[Google] HTTP {response.status}: {error_text[:200]}")
+                if response.status == 429:
+                    raise Exception("Google Gemini rate limit hit (15 RPM). Wait a minute.")
+                raise Exception(f"Google Gemini API error (HTTP {response.status}): {error_text}")
 
             data = await response.json()
             content = data["candidates"][0]["content"]["parts"][0]["text"]
