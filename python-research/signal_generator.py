@@ -227,7 +227,7 @@ class SignalGenerator:
         Analyze a crypto price prediction market with technical analysis.
         """
         try:
-            logger.info(f"  📊 Crypto market detected ({crypto_symbol}) - Fetching TA...")
+            logger.info(f"  [CRYPTO] Market detected ({crypto_symbol}) - Fetching TA...")
 
             # Get technical indicators
             indicators = await self.crypto_analyzer.get_technical_indicators(crypto_symbol)
@@ -250,7 +250,7 @@ class SignalGenerator:
 
             # Check confidence threshold for crypto
             if analysis.confidence < config.crypto.min_confidence:
-                logger.info(f"  ✗ Crypto confidence too low: {analysis.confidence:.1%} < {config.crypto.min_confidence:.1%}")
+                logger.info(f"  [SKIP] Crypto confidence too low: {analysis.confidence:.1%} < {config.crypto.min_confidence:.1%}")
                 return None
 
             # Get current prices
@@ -310,7 +310,7 @@ class SignalGenerator:
                 signal.metadata["trend"] = indicators.trend_short
                 signal.metadata["ta_signal"] = prediction_hint
                 signal.metadata["crypto_bonus"] = crypto_bonus
-                logger.info(f"  ✓ Signal generated: BUY YES @ ${yes_price:.4f}")
+                logger.info(f"  [OK] Signal generated: BUY YES @ ${yes_price:.4f}")
                 return signal
 
             elif no_ev > self.min_ev:
@@ -330,11 +330,11 @@ class SignalGenerator:
                 signal.metadata["trend"] = indicators.trend_short
                 signal.metadata["ta_signal"] = prediction_hint
                 signal.metadata["crypto_bonus"] = crypto_bonus
-                logger.info(f"  ✓ Signal generated: BUY NO @ ${no_price:.4f}")
+                logger.info(f"  [OK] Signal generated: BUY NO @ ${no_price:.4f}")
                 return signal
 
             else:
-                logger.info(f"  ✗ No trade opportunity (EV below threshold)")
+                logger.info(f"  [SKIP] No trade opportunity (EV below threshold)")
                 return None
 
         except Exception as e:
@@ -420,7 +420,7 @@ class SignalGenerator:
                     signal.metadata["is_new_market"] = True
                     signal.metadata["market_age_hours"] = market.age_hours
                     signal.metadata["new_market_bonus"] = new_market_bonus
-                logger.info(f"  ✓ Signal generated: BUY YES @ ${yes_price:.4f}")
+                logger.info(f"  [OK] Signal generated: BUY YES @ ${yes_price:.4f}")
                 return signal
 
             elif no_ev > self.min_ev:
@@ -437,11 +437,11 @@ class SignalGenerator:
                     signal.metadata["is_new_market"] = True
                     signal.metadata["market_age_hours"] = market.age_hours
                     signal.metadata["new_market_bonus"] = new_market_bonus
-                logger.info(f"  ✓ Signal generated: BUY NO @ ${no_price:.4f}")
+                logger.info(f"  [OK] Signal generated: BUY NO @ ${no_price:.4f}")
                 return signal
 
             else:
-                logger.info(f"  ✗ No trade opportunity (EV below threshold)")
+                logger.info(f"  [SKIP] No trade opportunity (EV below threshold)")
                 return None
 
         except Exception as e:
