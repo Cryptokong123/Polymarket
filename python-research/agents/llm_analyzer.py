@@ -235,7 +235,7 @@ class LLMAnalyzer:
             }],
             "generationConfig": {
                 "temperature": self.temperature,
-                "maxOutputTokens": 1000,
+                "maxOutputTokens": 500,  # Reduced to help with quota
             }
         }
 
@@ -260,25 +260,45 @@ class LLMAnalyzer:
 
         logger.info(f"[Google] Querying model: {model_name}")
 
-        async with session.post(url, json=payload) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                # Log the actual status code for debugging
-                logger.error(f"[Google] HTTP {response.status}: {error_text[:200]}")
-                if response.status == 429:
-                    raise Exception("Google Gemini rate limit hit (15 RPM). Wait a minute.")
-                raise Exception(f"Google Gemini API error (HTTP {response.status}): {error_text}")
+        # Retry logic for rate limits (15 RPM = 4 sec between requests minimum)
+        max_retries = 5
+        for attempt in range(max_retries):
+            async with session.post(url, json=payload) as response:
+                if response.status == 429:  # Rate limited
+                    if attempt < max_retries - 1:
+                        # Wait longer each retry: 10s, 20s, 30s, 40s
+                        wait_time = 10 * (attempt + 1)
+                        logger.warning(f"[Google] Rate limit hit, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"[Google] Quota exceeded after {max_retries} retries")
+                        raise Exception(
+                            "Google Gemini quota exceeded. Options:\n"
+                            "  1. Wait a few minutes and try again\n"
+                            "  2. Check your quota at https://aistudio.google.com/apikey\n"
+                            "  3. Enable billing for higher limits\n"
+                            "  4. Use a different provider (ollama, groq)"
+                        )
 
-            data = await response.json()
-            content = data["candidates"][0]["content"]["parts"][0]["text"]
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"[Google] HTTP {response.status}: {error_text[:200]}")
+                    raise Exception(f"Google Gemini API error (HTTP {response.status}): {error_text}")
 
-            # Log response for debugging
-            logger.info(f"[LLM Response] {content[:200]}...")
+                data = await response.json()
+                content = data["candidates"][0]["content"]["parts"][0]["text"]
 
-            # Rate limit: 15 requests per minute = 4 seconds between requests
-            await asyncio.sleep(4)
+                # Log response for debugging
+                logger.info(f"[LLM Response] {content[:200]}...")
 
-            return content
+                # Rate limit: 15 requests per minute = 5 seconds between requests (with buffer)
+                await asyncio.sleep(5)
+
+                return content
+
+        raise Exception("Google Gemini query failed after all retries")
 
     # =========================================
     # OPENAI (Paid)
