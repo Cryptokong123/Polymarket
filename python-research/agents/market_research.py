@@ -101,6 +101,36 @@ class MarketResearcher:
             logger.error(f"Failed to fetch markets: {e}")
             return []
 
+    def _safe_float(self, value: Any, default: float = 0.0) -> float:
+        """Safely convert a value to float, handling arrays and strings"""
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, list):
+            # If it's a list, try to get the first numeric element or sum
+            if len(value) == 0:
+                return default
+            try:
+                return float(value[0])
+            except (ValueError, TypeError):
+                return default
+        if isinstance(value, str):
+            # Handle string representations of arrays like "['0.5', '0.5']"
+            if value.startswith('['):
+                try:
+                    import ast
+                    parsed = ast.literal_eval(value)
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        return float(parsed[0])
+                except:
+                    return default
+            try:
+                return float(value)
+            except ValueError:
+                return default
+        return default
+
     def _parse_market(self, data: Dict[str, Any]) -> Optional[MarketData]:
         """Parse raw market data into MarketData object"""
         try:
@@ -112,9 +142,25 @@ class MarketResearcher:
             outcomes = data.get("outcomes", [])
             outcome_prices = data.get("outcomePrices", [])
 
+            # Handle outcome_prices being a string representation of a list
+            if isinstance(outcome_prices, str) and outcome_prices.startswith('['):
+                try:
+                    import ast
+                    outcome_prices = ast.literal_eval(outcome_prices)
+                except:
+                    outcome_prices = []
+
+            # Handle outcomes being a string representation of a list
+            if isinstance(outcomes, str) and outcomes.startswith('['):
+                try:
+                    import ast
+                    outcomes = ast.literal_eval(outcomes)
+                except:
+                    outcomes = []
+
             if outcomes and outcome_prices:
                 for i, outcome in enumerate(outcomes):
-                    price = float(outcome_prices[i]) if i < len(outcome_prices) else 0.5
+                    price = self._safe_float(outcome_prices[i], 0.5) if i < len(outcome_prices) else 0.5
                     token_id = ""
 
                     # Try to get token ID from clobRewards
@@ -123,7 +169,7 @@ class MarketResearcher:
 
                     tokens.append(MarketToken(
                         token_id=token_id,
-                        outcome=outcome,
+                        outcome=str(outcome) if not isinstance(outcome, str) else outcome,
                         price=price,
                     ))
 
@@ -150,9 +196,9 @@ class MarketResearcher:
                 active=data.get("active", True),
                 closed=data.get("closed", False),
                 tokens=tokens,
-                liquidity=float(data.get("liquidity", 0)),
-                volume_24h=float(data.get("volume24hr", 0)),
-                volume_total=float(data.get("volume", 0)),
+                liquidity=self._safe_float(data.get("liquidity", 0)),
+                volume_24h=self._safe_float(data.get("volume24hr", 0)),
+                volume_total=self._safe_float(data.get("volume", 0)),
                 created_at=data.get("createdAt"),
             )
 
