@@ -225,15 +225,15 @@ class SignalExecutor {
             signal_id: signal.signal_id,
           });
 
-          logger.info('✅ Order placed successfully', { orderId: orderResult.orderId });
+          logger.info('[OK] Order placed successfully', { orderId: orderResult.orderId });
         } else {
           result.error = orderResult.error;
-          logger.error('❌ Order failed', { error: orderResult.error });
+          logger.error('[ERROR] Order failed', { error: orderResult.error });
         }
       }
     } catch (error) {
       result.error = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('❌ Execution failed', { error: result.error });
+      logger.error('[ERROR] Execution failed', { error: result.error });
     } finally {
       // Remove from processing
       this.processingSignals.delete(signal.signal_id);
@@ -335,9 +335,9 @@ class SignalExecutor {
     this.moveToExecuted(filepath);
 
     if (result.success) {
-      logger.info('✅ Signal executed successfully');
+      logger.info('[OK] Signal executed successfully');
     } else {
-      logger.warn(`⚠️ Signal execution failed: ${result.error}`);
+      logger.warn(`[WARN] Signal execution failed: ${result.error}`);
     }
   }
 
@@ -413,7 +413,7 @@ class SignalExecutor {
     // Start watching for new signals
     this.watch();
 
-    logger.info('🤖 Signal Executor is running...');
+    logger.info('[BOT] Signal Executor is running...');
     logger.info('Waiting for signals from Python research layer...');
 
     // Keep process alive
